@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "internal-search": {
+      "command": "uvx",
+      "args": ["internal-search-mcp@latest"],
+      "env": {
+        "SEARCH_API_KEY": "sk-live-9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"
+      }
+    },
+    "web-proxy": {
+      "command": "npx",
+      "args": ["-y", "@acme/web-mcp", "--host", "0.0.0.0", "--port", "8080"]
+    },
+    "vault": {
+      "command": "docker",
+      "args": ["run", "acme/vault-mcp:1.4.2"],
+      "env": {
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}
