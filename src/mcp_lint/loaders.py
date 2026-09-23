@@ -17,8 +17,12 @@ The loader guesses the shape from the top-level keys, but callers can force one.
 from __future__ import annotations
 
 import json
+from http.client import HTTPException
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
+from urllib.error import URLError
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, build_opener
 
 from mcp_lint.models import Tool
 
@@ -86,12 +90,60 @@ def load_client_config(payload: dict[str, Any]) -> list[Tool]:
     return tools
 
 
-def detect_and_load(payload: Any) -> list[Tool]:
+def detect_and_load(payload: Any, server: str = "<inline>") -> list[Tool]:
     """Guess the input shape and load accordingly."""
 
     if isinstance(payload, dict) and "mcpServers" in payload:
         return load_client_config(payload)
-    return load_tools_export(payload)
+    return load_tools_export(payload, server=server)
+
+
+def _load_json(raw: str | bytes, source: str, server: str = "<inline>") -> list[Tool]:
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise LoadError(f"{source} is not valid JSON: {exc}") from exc
+    return detect_and_load(payload, server=server)
+
+
+def load_stdin(stream: TextIO) -> list[Tool]:
+    """Read a JSON document from an explicitly supplied standard-input stream."""
+    try:
+        raw = stream.read()
+    except (OSError, UnicodeError) as exc:
+        raise LoadError(f"cannot read <stdin>: {exc}") from exc
+    return _load_json(raw, "<stdin>", server="<stdin>")
+
+
+def _validate_url(url: str) -> None:
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("only http/https URLs with a host are supported")
+        _ = parsed.port  # Validate malformed port numbers before opening a connection.
+    except ValueError as exc:
+        raise LoadError(f"invalid URL: {exc}") from exc
+
+
+class _HTTPOnlyRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def load_url(url: str, *, timeout: float = 10, max_bytes: int = 5 * 1024 * 1024) -> list[Tool]:
+    """Fetch JSON over HTTP(S), with a socket timeout and bounded response body."""
+    _validate_url(url)
+    if timeout <= 0 or max_bytes <= 0:
+        raise LoadError("URL timeout and size limit must be positive")
+    try:
+        with build_opener(_HTTPOnlyRedirectHandler()).open(url, timeout=timeout) as response:
+            raw = response.read(max_bytes + 1)
+    except (URLError, OSError, HTTPException, ValueError) as exc:
+        raise LoadError(f"cannot fetch URL: {exc}") from exc
+    if len(raw) > max_bytes:
+        raise LoadError(f"URL response exceeds {max_bytes} bytes")
+    return _load_json(raw, "URL response", server=url)
 
 
 def load_path(path: str | Path) -> list[Tool]:
@@ -100,10 +152,6 @@ def load_path(path: str | Path) -> list[Tool]:
     p = Path(path)
     try:
         raw = p.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise LoadError(f"cannot read {p}: {exc}") from exc
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise LoadError(f"{p} is not valid JSON: {exc}") from exc
-    return detect_and_load(payload)
+    return _load_json(raw, str(p))
