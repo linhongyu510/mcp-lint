@@ -93,6 +93,27 @@ mcp-lint examples/tools_export.json --format json
 | `1` | at least one blocking finding |
 | `2` | usage / load error |
 
+## Use it as a pre-commit hook
+
+`mcp-lint` ships a [pre-commit](https://pre-commit.com) hook, so you can gate
+commits that would introduce a poisoned or unsafe MCP definition. Add to your
+`.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/linhongyu510/mcp-lint
+    rev: v0.1.0
+    hooks:
+      - id: mcp-lint
+        # Narrow to the JSON files that are actually MCP definitions:
+        files: ^(.*mcp.*\.json|.*tools[_-]?export\.json)$
+        # Optional: tighten the gate
+        args: ["--fail-level", "critical"]
+```
+
+The hook only lints JSON files (`types: [json]`); the `files:` regex above scopes
+it to your MCP config/export paths so it does not scan unrelated JSON.
+
 ## Rules
 
 | ID | Severity | Checks |
