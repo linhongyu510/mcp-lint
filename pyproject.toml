@@ -26,7 +26,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-cov", "ruff", "build"]
+dev = ["pytest>=7", "pytest-cov", "ruff", "build", "jsonschema>=4"]
 
 [project.scripts]
 mcp-lint = "mcp_lint.cli:main"
