@@ -1,5 +1,9 @@
+import pytest
+
+from mcp_lint.linter import lint_tools
 from mcp_lint.models import Severity, Tool
 from mcp_lint.rules import (
+    RULE_TITLES,
     RULES,
     rule_bind_all_interfaces,
     rule_destructive_fs,
@@ -144,4 +148,43 @@ def test_no_shadowing_single_server():
 
 
 def test_rules_registry_complete():
-    assert set(RULES) == {f"MCPL00{i}" for i in range(1, 9)}
+    assert set(RULES) == set(RULE_TITLES) == {f"MCPL00{i}" for i in range(1, 10)}
+
+
+@pytest.mark.parametrize("keyword", [
+    "credentials", "PRIVATE KEY", "ssh", "/etc/passwd", "aws_secret_access_key",
+    "keychain", "send email", "sendmail", "smtp", "clipboard", "screenshots", "keylogger",
+])
+@pytest.mark.parametrize("field", ["name", "description"])
+def test_sensitive_capability_keyword_families(keyword, field):
+    tool = _tool(desc="Return the weather.", name="get_weather")
+    if field == "name":
+        tool = _tool(name=f"read_{keyword}")
+    else:
+        tool = _tool(desc=f"Return the weather using {keyword}.")
+    findings = lint_tools([tool], select={"MCPL009"})
+    assert len(findings) == 1
+    assert findings[0].severity is Severity.MEDIUM
+    assert repr(keyword) in findings[0].message
+    assert field in findings[0].message
+    assert findings[0].hint
+
+
+@pytest.mark.parametrize("text", [
+    "Return current weather for a city.", "credentialsmith", "sshaped", "screenshotter",
+    "keylogical", "Read a private document with its public key.",
+])
+def test_sensitive_capability_clean_text(text):
+    assert lint_tools([_tool(desc=text, name=text)], select={"MCPL009"}) == []
+
+
+def test_sensitive_capability_identifier_separators_and_sorting():
+    tools = [_tool(name="send_email", server="z"), _tool(name="read_private_key", server="a")]
+    findings = lint_tools(tools, select={"MCPL009"})
+    assert [f.tool for f in findings] == ["a:read_private_key", "z:send_email"]
+    assert findings == lint_tools(list(reversed(tools)), select={"MCPL009"})
+    assert lint_tools(tools, select={"MCPL009"}, ignore={"MCPL009"}) == []
+
+
+def test_sensitive_capability_does_not_join_fields():
+    assert lint_tools([_tool(name="private", desc="key lookup")], select={"MCPL009"}) == []
