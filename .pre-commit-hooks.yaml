@@ -1,0 +1,26 @@
+# pre-commit hook definitions for mcp-lint.
+#
+# Consumers add this to their own .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/linhongyu510/mcp-lint
+#       rev: v0.1.0
+#       hooks:
+#         - id: mcp-lint
+#           files: ^(.*mcp.*\.json|.*tools[_-]?export\.json)$
+#
+# By default the hook does not guess which JSON files are MCP definitions — a repo's
+# JSON could be anything — so `files:` is intentionally left broad and should be
+# narrowed by the consumer to their actual MCP config/export paths. Pass extra CLI
+# flags (e.g. --fail-level critical) via `args:`.
+- id: mcp-lint
+  name: mcp-lint (MCP tool-definition security lint)
+  description: >-
+    Offline, deterministic static linter for Model Context Protocol tool
+    definitions. Flags tool poisoning, prompt injection, unconstrained schemas,
+    hardcoded secrets and unsafe capabilities before an agent loads them.
+  entry: mcp-lint
+  language: python
+  types: [json]
+  # No default file filter beyond JSON; narrow with `files:` in your config.
+  require_serial: false
