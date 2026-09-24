@@ -184,6 +184,10 @@ Tests are fully offline and deterministic; there is no network fixture.
 - Secret detection is heuristic. Rotate anything it flags and audit git history
   separately.
 
+## Related projects
+
+- [aiops-copilot](https://github.com/linhongyu510/aiops-copilot) — by the same author: an evidence-driven AIOps diagnostic agent (LangGraph Plan-Execute-Replan + RAG + MCP tool orchestration) where every conclusion is traceable to a tool result or knowledge-base source.
+
 ## License
 
 [MIT](./LICENSE)
