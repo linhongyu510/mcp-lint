@@ -76,6 +76,11 @@ Machine-readable output for CI diffing:
 mcp-lint examples/tools_export.json --format json
 ```
 
+For SARIF 2.1.0 consumers, use `--format sarif` and redirect stdout to a file.
+Results include stable partial fingerprints based on rule, qualified tool name,
+and message. Normalized findings have no source file/line information, so the
+report identifies tools in messages rather than inventing file annotations.
+
 ## Use it as a CI gate
 
 `mcp-lint` exits non-zero when any finding is at or above `--fail-level`
@@ -93,18 +98,46 @@ mcp-lint examples/tools_export.json --format json
 | `1` | at least one blocking finding |
 | `2` | usage / load error |
 
+To upload SARIF to GitHub code scanning, add these steps after checkout and
+installation in a job with `contents: read` and `security-events: write`
+permissions (the repository must support code scanning):
+
+```yaml
+- name: Scan MCP definitions
+  id: mcp_scan
+  shell: bash
+  run: |
+    set +e
+    mcp-lint mcp/*.json --format sarif > results.sarif
+    status=$?
+    echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+    exit "$status"
+- name: Upload findings
+  if: ${{ !cancelled() && (steps.mcp_scan.outputs.exit_code == '0' || steps.mcp_scan.outputs.exit_code == '1') }}
+  uses: github/codeql-action/upload-sarif@v4
+  with:
+    sarif_file: results.sarif
+```
+
+This uploads reports even when blocking findings fail the scan step, preserving
+the CI gate. Usage/load errors do not upload an empty report. See GitHub's
+[SARIF upload documentation](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/integrate-with-existing-tools/upload-sarif-file).
+
 ## Rules
 
-| ID | Severity | Checks |
-|---|---|---|
-| `MCPL001` | critical | tool-poisoning / prompt-injection phrasing in a description |
-| `MCPL002` | high | description implies command / shell execution |
-| `MCPL003` | medium | description implies destructive file-system ops |
-| `MCPL004` | medium/low | input schema is missing or accepts arbitrary input |
-| `MCPL005` | critical | hard-coded secret / credential in config or description |
-| `MCPL006` | medium | server launch binds `0.0.0.0` (all interfaces) |
-| `MCPL007` | low | server launched from an unpinned reference (`@latest`, `:latest`) |
-| `MCPL008` | high | the same tool name is exposed by more than one server (shadowing) |
+| ID | Severity | SARIF level | Checks |
+|---|---|---|---|
+| `MCPL001` | critical | error | tool-poisoning / prompt-injection phrasing in a description |
+| `MCPL002` | high | error | description implies command / shell execution |
+| `MCPL003` | medium | warning | description implies destructive file-system ops |
+| `MCPL004` | medium/low | warning/note | input schema is missing or accepts arbitrary input |
+| `MCPL005` | critical | error | hard-coded secret / credential in config or description |
+| `MCPL006` | medium | warning | server launch binds `0.0.0.0` (all interfaces) |
+| `MCPL007` | low | note | server launched from an unpinned reference (`@latest`, `:latest`) |
+| `MCPL008` | high | error | the same tool name is exposed by more than one server (shadowing) |
+
+Info-level findings also map to SARIF `note`; `--fail-level` always uses the
+original mcp-lint severity.
 
 List them any time with `mcp-lint --list-rules`. Select or suppress:
 
@@ -131,7 +164,7 @@ The format is auto-detected from the top-level keys.
 loaders.py   JSON (config | export) -> normalized Tool[]
 rules.py     each rule: (Tool[]) -> Finding[]   (pure, deterministic)
 linter.py    select/ignore rules, run, sort findings deterministically
-report.py    Finding[] -> text (human) | json (CI)
+report.py    Finding[] -> text (human) | json (CI) | sarif (security dashboards)
 cli.py       argparse front end + exit-code policy
 ```
 

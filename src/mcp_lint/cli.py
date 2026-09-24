@@ -20,7 +20,7 @@ from mcp_lint import __version__
 from mcp_lint.linter import Linter
 from mcp_lint.loaders import LoadError, load_path
 from mcp_lint.models import Finding, Severity
-from mcp_lint.report import render_json, render_text
+from mcp_lint.report import render_json, render_sarif, render_text
 from mcp_lint.rules import RULE_TITLES
 
 
@@ -30,7 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Offline, deterministic static linter for MCP tool definitions.",
     )
     p.add_argument("paths", nargs="*", help="MCP config or tools-export JSON file(s)")
-    p.add_argument("--format", choices=("text", "json"), default="text")
+    p.add_argument("--format", choices=("text", "json", "sarif"), default="text")
     p.add_argument(
         "--fail-level",
         default="high",
@@ -95,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
     color = sys.stdout.isatty() and not args.no_color
     if args.format == "json":
         print(render_json(all_findings, tool_count=total_tools))
+    elif args.format == "sarif":
+        print(render_sarif(all_findings, tool_count=total_tools))
     else:
         print(render_text(all_findings, tool_count=total_tools, color=color))
 
