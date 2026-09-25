@@ -28,8 +28,10 @@ trusts it. A malicious or careless server can therefore:
 
 Most existing MCP security tools are *runtime proxies* — they sit in the request
 path and need a live server. `mcp-lint` is the opposite: a **zero-dependency,
-zero-network, deterministic** static check you run on the JSON, so it fits in a
+deterministic** static check you run on the JSON, so it fits in a
 pre-commit hook or a CI gate and gives the same answer every time.
+Local files and stdin stay offline; an explicit `--url` optionally fetches a JSON
+export without connecting an agent or executing any MCP tools.
 
 > `mcp-lint` is a first-pass triage gate, not a proof of safety. A clean report
 > means "no known signal", not "safe". False positives are expected and
@@ -145,6 +147,28 @@ launch-surface entry carrying its command line and env, so the config-hygiene
 rules (`MCPL005`–`MCPL007`) can fire without a live connection.
 
 The format is auto-detected from the top-level keys.
+
+Read either format from standard input with `-`, or fetch a JSON export with
+`--url`:
+
+```bash
+cat examples/tools_export.json | mcp-lint -
+mcp-lint --url https://example.com/tools.json --format json
+```
+
+Inputs can be combined with file paths; `--url` is repeatable and stdin may be
+read once. Tool exports from stdin use the server label `<stdin>`; URL exports
+use their requested URL. Client configs retain their named `mcpServers` entries.
+All inputs use the same format detection and rules.
+
+URL fetching uses Python's standard library with a 10-second socket timeout and
+a 5 MiB response-body limit, even without a `Content-Length` header. Only HTTP
+and HTTPS are allowed, including redirect destinations. Invalid schemes, fetch
+errors, oversized responses and malformed JSON produce a load error (exit 2).
+The socket timeout bounds individual blocking operations, not total wall time
+for a slowly streaming response. Fetch only URLs you intend to access: private
+network addresses are not blocked, and environment proxy settings may apply.
+URL labels can appear in findings, so avoid credentials or secrets in URLs.
 
 ## Architecture
 

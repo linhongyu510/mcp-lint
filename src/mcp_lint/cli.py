@@ -18,7 +18,7 @@ from pathlib import Path
 
 from mcp_lint import __version__
 from mcp_lint.linter import Linter
-from mcp_lint.loaders import LoadError, load_path
+from mcp_lint.loaders import LoadError, load_path, load_stdin, load_url
 from mcp_lint.models import Finding, Severity
 from mcp_lint.report import render_json, render_text
 from mcp_lint.rules import RULE_TITLES
@@ -29,7 +29,8 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="mcp-lint",
         description="Offline, deterministic static linter for MCP tool definitions.",
     )
-    p.add_argument("paths", nargs="*", help="MCP config or tools-export JSON file(s)")
+    p.add_argument("paths", nargs="*", help="MCP config or tools-export JSON file(s); - reads stdin")
+    p.add_argument("--url", action="append", default=[], help="HTTP(S) JSON export URL (repeatable)")
     p.add_argument("--format", choices=("text", "json"), default="text")
     p.add_argument(
         "--fail-level",
@@ -62,8 +63,11 @@ def main(argv: list[str] | None = None) -> int:
         print(_list_rules())
         return 0
 
-    if not args.paths:
-        print("mcp-lint: no input files (try --list-rules or -h)", file=sys.stderr)
+    if not args.paths and not args.url:
+        print("mcp-lint: no inputs (try --list-rules or -h)", file=sys.stderr)
+        return 2
+    if args.paths.count("-") > 1:
+        print("mcp-lint: stdin (-) can only be read once", file=sys.stderr)
         return 2
 
     try:
@@ -81,9 +85,14 @@ def main(argv: list[str] | None = None) -> int:
 
     all_findings: list[Finding] = []
     total_tools = 0
-    for path in args.paths:
+    for source, is_url in [(path, False) for path in args.paths] + [(url, True) for url in args.url]:
         try:
-            tools = load_path(Path(path))
+            if is_url:
+                tools = load_url(source)
+            elif source == "-":
+                tools = load_stdin(sys.stdin)
+            else:
+                tools = load_path(Path(source))
         except LoadError as exc:
             print(f"mcp-lint: {exc}", file=sys.stderr)
             return 2
