@@ -126,6 +126,7 @@ it to your MCP config/export paths so it does not scan unrelated JSON.
 | `MCPL006` | medium | server launch binds `0.0.0.0` (all interfaces) |
 | `MCPL007` | low | server launched from an unpinned reference (`@latest`, `:latest`) |
 | `MCPL008` | high | the same tool name is exposed by more than one server (shadowing) |
+| `MCPL009` | medium | sensitive resource or capability keyword in a tool name or description |
 
 List them any time with `mcp-lint --list-rules`. Select or suppress:
 
@@ -133,6 +134,23 @@ List them any time with `mcp-lint --list-rules`. Select or suppress:
 mcp-lint mcp.json --select MCPL001,MCPL005      # only these rules
 mcp-lint mcp.json --ignore MCPL004              # everything except this one
 ```
+
+### Sensitive-capability keywords (`MCPL009`)
+
+The keyword corpus covers `credential`/`credentials`, `private key`/`private keys`,
+`ssh`, `/etc/passwd`, `aws_secret`/`aws_secret_access_key`, `keychain`, `send email`,
+`sendmail`, `smtp`, `clipboard`, `screenshot`/`screenshots`, and
+`keylog`/`keylogger`/`keylogging`. Matching is case-insensitive; spaces, underscores,
+and hyphens separate words in `private key` and `send email`, so tool names such
+as `read_private_key` are covered too. Alphanumeric boundaries avoid matching
+unrelated words such as `credentialsmith`.
+
+At most one finding is emitted per tool: the name is checked before the description,
+using the corpus order above. Each finding quotes the exact matched text and asks
+the reviewer to check purpose, permissions, and approval requirements. This is a
+keyword signal, **not a semantic judgment** about whether the capability is justified
+or malicious; legitimate credential or email tools can also trigger it. Use
+`--ignore MCPL009` to suppress the rule after review.
 
 ## Input formats
 

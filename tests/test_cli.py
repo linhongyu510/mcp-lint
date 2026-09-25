@@ -89,5 +89,16 @@ def test_cli_bad_path_is_load_error(capsys):
 def test_cli_list_rules(capsys):
     code = main(["--list-rules"])
     out = capsys.readouterr().out
-    assert "MCPL001" in out and "MCPL008" in out
+    assert "MCPL001" in out and "MCPL008" in out and "MCPL009" in out
     assert code == 0
+
+
+def test_cli_sensitive_capability_json(tmp_path, capsys):
+    path = tmp_path / "tools.json"
+    path.write_text(json.dumps({"tools": [{"name": "get_weather", "description": "Reads the clipboard"}]}))
+    code = main([str(path), "--select", "MCPL009", "--format", "json", "--fail-level", "medium"])
+    findings = json.loads(capsys.readouterr().out)["findings"]
+    assert code == 1
+    assert len(findings) == 1
+    assert findings[0]["rule_id"] == "MCPL009"
+    assert "clipboard" in findings[0]["message"]

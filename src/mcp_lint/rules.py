@@ -55,6 +55,18 @@ _NETWORK_PATTERNS = [
     r"\bwebhook\b", r"\bpost to\b", r"\bupload\b",
 ]
 
+# Sensitive resources and capabilities, not evidence of malicious intent. Keep
+# this literal corpus in sync with the MCPL009 README section. Separators allow
+# snake_case tool names; alphanumeric boundaries avoid matching unrelated words.
+_SENSITIVE_PATTERNS = [
+    rf"(?<![a-z0-9])(?:{pattern})(?![a-z0-9])"
+    for pattern in (
+        r"credentials?", r"private[ _-]+keys?", r"ssh", r"/etc/passwd",
+        r"aws_secret(?:_access_key)?", r"keychain", r"send[ _-]+email",
+        r"sendmail", r"smtp", r"clipboard", r"screenshots?", r"keylog(?:ger|ging)?",
+    )
+]
+
 # Secret-leak signals in launch env / descriptions.
 _SECRET_KEY_PATTERNS = [
     r"(?i)\b[A-Z0-9_]*(api[_-]?key|secret|token|password|passwd|access[_-]?key)\b\s*[=:]\s*\S+",
@@ -288,6 +300,28 @@ def rule_name_shadowing(tools: list[Tool]) -> list[Finding]:
     return out
 
 
+def rule_sensitive_capability(tools: list[Tool]) -> list[Finding]:
+    """MCPL009: sensitive capability keywords in a tool's name or description."""
+    out: list[Finding] = []
+    for tool in tools:
+        for field, text in (("name", tool.name), ("description", tool.description)):
+            hit = _matches(text, _SENSITIVE_PATTERNS)
+            if hit:
+                out.append(Finding(
+                    rule_id="MCPL009",
+                    severity=Severity.MEDIUM,
+                    tool=tool.qualified_name,
+                    message=f"{field} mentions sensitive resource or capability: {hit!r}",
+                    hint=(
+                        "Confirm this capability matches the tool's intended purpose. "
+                        "Remove unrelated access, restrict permissions, and require "
+                        "approval for sensitive operations. A keyword alone does not prove misuse."
+                    ),
+                ))
+                break
+    return out
+
+
 RULES: dict[str, Rule] = {
     "MCPL001": rule_tool_poisoning,
     "MCPL002": rule_undeclared_shell,
@@ -297,6 +331,7 @@ RULES: dict[str, Rule] = {
     "MCPL006": rule_bind_all_interfaces,
     "MCPL007": rule_unpinned_package,
     "MCPL008": rule_name_shadowing,
+    "MCPL009": rule_sensitive_capability,
 }
 
 RULE_TITLES: dict[str, str] = {
@@ -308,4 +343,5 @@ RULE_TITLES: dict[str, str] = {
     "MCPL006": "binds all network interfaces",
     "MCPL007": "unpinned server package/image",
     "MCPL008": "tool-name shadowing across servers",
+    "MCPL009": "sensitive resource or capability keyword",
 }
